@@ -22,10 +22,12 @@ public:
     rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCornerPoints;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSurfacePoints;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubRealSurfacePoints;
 
     pcl::PointCloud<PointType>::Ptr extractedCloud;
     pcl::PointCloud<PointType>::Ptr cornerCloud;
     pcl::PointCloud<PointType>::Ptr surfaceCloud;
+    pcl::PointCloud<PointType>::Ptr RealsurfaceCloud;
 
     pcl::VoxelGrid<PointType> downSizeFilter;
 
@@ -50,7 +52,8 @@ public:
             "lio_sam/feature/cloud_corner", 1);
         pubSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>(
             "lio_sam/feature/cloud_surface", 1);
-
+        pubRealSurfacePoints = create_publisher<sensor_msgs::msg::PointCloud2>(
+            "lio_sam/feature/cloud_Realsurface", 1);
         initializationValue();
     }
 
@@ -63,6 +66,7 @@ public:
         extractedCloud.reset(new pcl::PointCloud<PointType>());
         cornerCloud.reset(new pcl::PointCloud<PointType>());
         surfaceCloud.reset(new pcl::PointCloud<PointType>());
+        RealsurfaceCloud.reset(new pcl::PointCloud<PointType>());
 
         cloudCurvature = new float[N_SCAN*Horizon_SCAN];
         cloudNeighborPicked = new int[N_SCAN*Horizon_SCAN];
@@ -97,7 +101,7 @@ public:
                             + cloudInfo.point_range[i+5];
 
             cloudCurvature[i] = diffRange*diffRange;//diffX * diffX + diffY * diffY + diffZ * diffZ;
-
+            // non normalizza rispetto i punti del cluster (10) e il range r_i
             cloudNeighborPicked[i] = 0;
             cloudLabel[i] = 0;
             // cloudSmoothness for sorting
@@ -147,9 +151,11 @@ public:
     {
         cornerCloud->clear();
         surfaceCloud->clear();
+        RealsurfaceCloud->clear();
 
         pcl::PointCloud<PointType>::Ptr surfaceCloudScan(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr surfaceCloudScanDS(new pcl::PointCloud<PointType>());
+        
 
         for (int i = 0; i < N_SCAN; i++)
         {
@@ -173,7 +179,7 @@ public:
                     if (cloudNeighborPicked[ind] == 0 && cloudCurvature[ind] > edgeThreshold)
                     {
                         largestPickedNum++;
-                        if (largestPickedNum <= 20){
+                        if (largestPickedNum <= 20){ //seleziona massimo 20 punti corner per ogni sottosezione della scansione
                             cloudLabel[ind] = 1;
                             cornerCloud->push_back(extractedCloud->points[ind]);
                         } else {
@@ -203,7 +209,8 @@ public:
                     int ind = cloudSmoothness[k].ind;
                     if (cloudNeighborPicked[ind] == 0 && cloudCurvature[ind] < surfThreshold)
                     {
-
+                        //non seleziona un numero massimo di punti nella subregion, anche perchè le regioni sono divise in "altezza". 
+                        // potremmo non considerare i ring più alti delle scansioni
                         cloudLabel[ind] = -1;
                         cloudNeighborPicked[ind] = 1;
 
@@ -228,6 +235,9 @@ public:
                 {
                     if (cloudLabel[k] <= 0){
                         surfaceCloudScan->push_back(extractedCloud->points[k]);
+                    }
+                    if (cloudLabel[k] < 0){
+                        RealsurfaceCloud->push_back(extractedCloud->points[k]);
                     }
                 }
             }
@@ -255,6 +265,7 @@ public:
         // save newly extracted features
         cloudInfo.cloud_corner = publishCloud(pubCornerPoints,  cornerCloud,  cloudHeader.stamp, lidarFrame);
         cloudInfo.cloud_surface = publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
+        cloudInfo.cloud_realsurface=publishCloud(pubRealSurfacePoints,RealsurfaceCloud,cloudHeader.stamp,lidarFrame);
         // publish to mapOptimization
         pubLaserCloudInfo->publish(cloudInfo);
     }

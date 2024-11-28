@@ -13,7 +13,9 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
-
+  
+  <depend>topic_tools</depend>
+  <build_depend>robot_localization</build_depend>
   <build_depend>rclcpp</build_depend>
   <build_depend>rclpy</build_depend>
   <build_depend>std_msgs</build_depend>
