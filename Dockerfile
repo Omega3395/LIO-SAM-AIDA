@@ -25,7 +25,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN mkdir -p ~/ros2_ws/src \
     && cd ~/ros2_ws/src \
-    && git clone --branch ros2 https://github.com/Omega3395/LIO-SAM.git \
+    && git clone --branch develop https://github.com/Omega3395/LIO-SAM.git \
     && cd .. \
     && source /opt/ros/humble/setup.bash \
     && colcon build
