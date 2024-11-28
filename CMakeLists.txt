@@ -61,6 +61,13 @@ else()
   target_link_libraries(${PROJECT_NAME}_mapOptimization gtsam "${cpp_typesupport_target}")
 endif()
 
+add_executable(${PROJECT_NAME}_globalLocalize src/globalLocalize.cpp)
+ament_target_dependencies(${PROJECT_NAME}_globalLocalize rclcpp rclpy std_msgs sensor_msgs geometry_msgs nav_msgs pcl_conversions pcl_msgs visualization_msgs tf2 tf2_ros tf2_eigen tf2_sensor_msgs tf2_geometry_msgs OpenCV PCL GTSAM)
+if(OpenMP_CXX_FOUND)
+  target_compile_options(${PROJECT_NAME}_globalLocalize PRIVATE ${OpenMP_CXX_FLAGS})
+  target_link_libraries(${PROJECT_NAME}_globalLocalize OpenMP::OpenMP_CXX "${cpp_typesupport_target}")
+endif()
+target_link_libraries(${PROJECT_NAME}_globalLocalize gtsam ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${geometry_msgs_LIBRARIES} "${cpp_typesupport_target}")
 
 install(
   DIRECTORY launch
@@ -89,6 +96,11 @@ install(
 
 install(
   TARGETS ${PROJECT_NAME}_mapOptimization
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  TARGETS ${PROJECT_NAME}_globalLocalize
   DESTINATION lib/${PROJECT_NAME}
 )
 
