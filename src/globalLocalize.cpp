@@ -1309,8 +1309,9 @@ public:
 
     /*************added by gc*****Todo: (1) ICP or matching point to edge and surface?  (2) global_pcd or whole keyframes************/
     void cloudGlobalLoad()
-    {
-        pcl::io::loadPCDFile(std::getenv("HOME") + savePCDDirectory + "cloudGlobal.pcd", *cloudGlobalMap);
+    {   
+
+        pcl::io::loadPCDFile(std::getenv("HOME") + savePCDDirectory + "GlobalMap.pcd", *cloudGlobalMap);
 
         pcl::PointCloud<PointType>::Ptr cloud_temp(new pcl::PointCloud<PointType>());
         downSizeFilterICP.setInputCloud(cloudGlobalMap);
