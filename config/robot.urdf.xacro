@@ -41,7 +41,7 @@
 
   <link name="ouster_sensor_center"> </link>
   <joint name="ouster_joint" type="fixed">
-    <parent link="base_link" />
+    <parent link="lidar_link" />
     <child link="ouster_sensor_center" />
     <origin xyz="0 0 1.13" rpy="0 0 0" />
   </joint>
