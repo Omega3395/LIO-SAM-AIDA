@@ -209,9 +209,10 @@ public:
         pubLaserCloudSurround = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/map_global", 1);
         pubOdomAftMappedROS = create_publisher<nav_msgs::msg::Odometry> ("lio_sam/mapping/odometry", 1);
         pubPath = create_publisher<nav_msgs::msg::Path>("lio_sam/mapping/path", 1);
+        br = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
         subLaserCloudInfo = create_subscription<lio_sam::msg::CloudInfo>(
-            "lio_sam/feature/cloud_info", qos,//10 originally
+            "lio_sam/feature/cloud_info", qos,
             std::bind(&mapOptimization::laserCloudInfoHandler, this, std::placeholders::_1));
         subGPS = create_subscription<nav_msgs::msg::Odometry>(
             gpsTopic, 200,
@@ -250,7 +251,7 @@ public:
     }
 
     void allocateMemory()
-    {
+    {   
         cloudGlobalMap.reset(new pcl::PointCloud<PointType>());//addded by gc
 	    cloudGlobalMapDS.reset(new pcl::PointCloud<PointType>());//added
         cloudScanForInitialize.reset(new pcl::PointCloud<PointType>());
@@ -313,7 +314,6 @@ public:
 
     void laserCloudInfoHandler(const lio_sam::msg::CloudInfo::SharedPtr msgIn)
     {
-
         // extract time stamp
         //added
 
@@ -413,11 +413,11 @@ public:
 
         for (int i = 0; i < cloudSize; ++i){
 
-            const auto &pointFrom = &cloudIn->points[i];
-            cloudOut->points[i].x = transCur(0,0) * pointFrom->x + transCur(0,1) * pointFrom->y + transCur(0,2) * pointFrom->z + transCur(0,3);
-            cloudOut->points[i].y = transCur(1,0) * pointFrom->x + transCur(1,1) * pointFrom->y + transCur(1,2) * pointFrom->z + transCur(1,3);
-            cloudOut->points[i].z = transCur(2,0) * pointFrom->x + transCur(2,1) * pointFrom->y + transCur(2,2) * pointFrom->z + transCur(2,3);
-            cloudOut->points[i].intensity = pointFrom->intensity;
+            const auto &pointFrom = cloudIn->points[i];
+            cloudOut->points[i].x = transCur(0,0) * pointFrom.x + transCur(0,1) * pointFrom.y + transCur(0,2) * pointFrom.z + transCur(0,3);
+            cloudOut->points[i].y = transCur(1,0) * pointFrom.x + transCur(1,1) * pointFrom.y + transCur(1,2) * pointFrom.z + transCur(1,3);
+            cloudOut->points[i].z = transCur(2,0) * pointFrom.x + transCur(2,1) * pointFrom.y + transCur(2,2) * pointFrom.z + transCur(2,3);
+            cloudOut->points[i].intensity = pointFrom.intensity;
         }
         return cloudOut;
     }
@@ -425,7 +425,7 @@ public:
     gtsam::Pose3 pclPointTogtsamPose3(PointTypePose thisPoint)
     {
         return gtsam::Pose3(gtsam::Rot3::RzRyRx(double(thisPoint.roll), double(thisPoint.pitch), double(thisPoint.yaw)),
-                            gtsam::Point3(double(thisPoint.x),    double(thisPoint.y),     double(thisPoint.z)));
+                                  gtsam::Point3(double(thisPoint.x),    double(thisPoint.y),     double(thisPoint.z)));
     }
 
     gtsam::Pose3 trans2gtsamPose(float transformIn[])
@@ -455,9 +455,11 @@ public:
         thisPose6D.yaw   = transformIn[2];
         return thisPose6D;
     }
-
+    //missing void visualizeGlobalMapThread()
     void updateInitialGuess()
     {
+        //missing // save current transformation before any processing
+        //incrementalOdometryAffineFront = trans2Affine3f(transformTobeMapped);
         static Eigen::Affine3f lastImuTransformation;//gc: note that this is static type
         // initialization
         if (cloudKeyPoses3D->points.empty())//gc: there is no key pose 初始化
@@ -473,6 +475,8 @@ public:
             return;
         }
         // use imu pre-integration estimation for pose guess
+        //missing static bool lastImuPreTransAvailable = false;
+        //static Eigen::Affine3f lastImuPreTransformation;
         if (cloudInfo.odom_available == true && cloudInfo.imu_preintegration_reset_id == imuPreintegrationResetId)
         {
             transformTobeMapped[0] = cloudInfo.initial_guess_roll;
@@ -547,7 +551,7 @@ public:
     void extractCloud(pcl::PointCloud<PointType>::Ptr cloudToExtract)
     {
         //change-2
-
+        //missing MAJOR DIFFERENCE
         /**************gc added**************/
 		//std::cout << "cloudToExtract size: " << cloudToExtract->size() << std::endl;
 
@@ -1237,7 +1241,16 @@ public:
         quat.setRPY(transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
         laserOdometryROS.pose.covariance[0] = double(imuPreintegrationResetId);
         pubOdomAftMappedROS->publish(laserOdometryROS);
-        //DIFFERENZE DA MAP OPT
+        //AGGIUNTE DA MAP_OPTIMIZATION
+        // Publish TF
+        quat.setRPY(transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+        tf2::Transform t_odom_to_lidar = tf2::Transform(quat, tf2::Vector3(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]));
+        tf2::TimePoint time_point = tf2_ros::fromRclcpp(timeLaserInfoStamp);
+        tf2::Stamped<tf2::Transform> temp_odom_to_lidar(t_odom_to_lidar, time_point, odometryFrame);
+        geometry_msgs::msg::TransformStamped trans_odom_to_lidar;
+        tf2::convert(temp_odom_to_lidar, trans_odom_to_lidar);
+        trans_odom_to_lidar.child_frame_id = "lidar_link";
+        br->sendTransform(trans_odom_to_lidar);
     }
 
     void publishFrames()
@@ -1263,7 +1276,7 @@ public:
             publishCloud(pubRecentKeyFrame, cloudOut, timeLaserInfoStamp, "odom");
         }
 
-        // Pubblica la nuvola di punti in "map"
+        // Pubblica la nuvola di punti in mapFrame
         if (pubLaserCloudInWorld->get_subscription_count() != 0)
         {
             pcl::PointCloud<PointType>::Ptr cloudInBase(new pcl::PointCloud<PointType>());
@@ -1283,7 +1296,7 @@ public:
             *cloudInBase += *laserCloudSurfLastDS;
 
             pcl::transformPointCloud(*cloudInBase, *cloudOutInWorld, T_poseInMap.matrix());
-            publishCloud(pubLaserCloudInWorld, cloudOutInWorld, timeLaserInfoStamp, "map");
+            publishCloud(pubLaserCloudInWorld, cloudOutInWorld, timeLaserInfoStamp, mapFrame);
         }
         //added *********************by gc
         // publish registered high-res raw cloud
@@ -1325,7 +1338,6 @@ public:
 
     void globalLocalizeThread()
     {
-
         //ros::Rate rate(0.2);
         while (rclcpp::ok())
         {
@@ -1366,7 +1378,7 @@ public:
         *laserCloudIn += *cloudScanForInitialize;
         mtx_general.unlock();
 
-        //publishCloud(&fortest_publasercloudINWorld, laserCloudIn, timeLaserInfoStamp, "map");
+        //publishCloud(&fortest_publasercloudINWorld, laserCloudIn, timeLaserInfoStamp, mapFrame);
 
         if(laserCloudIn->points.size() == 0)
             return;
@@ -1435,10 +1447,11 @@ public:
         tranformOdomToWorld[4] = deltay;
         tranformOdomToWorld[5] = deltaz;
         mtxtranformOdomToWorld.unlock();
-	    std::cout << "the pose of odom relative to Map: x" << tranformOdomToWorld[3] << " y" << tranformOdomToWorld[4]
-                  << " z" << tranformOdomToWorld[5] <<std::endl;
-        publishCloud(pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, "map");
-	    publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, "map");
+	    std::cout << "the pose of odom relative to Map: x =" << tranformOdomToWorld[3] << " y=" << tranformOdomToWorld[4]
+                  << " z=" << tranformOdomToWorld[5] <<std::endl;
+        publishCloud(pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, mapFrame);
+	    cout << "Publish Map World ..." << endl;
+        publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);
 
         if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
         {
@@ -1453,7 +1466,7 @@ public:
             q_odomTo_map.setRPY(deltaR, deltaP, deltaY);
 
             pose_odomTo_map.header.stamp = timeLaserInfoStamp;
-            pose_odomTo_map.header.frame_id = "map";
+            pose_odomTo_map.header.frame_id = mapFrame;
             pose_odomTo_map.pose.position.x = deltax; pose_odomTo_map.pose.position.y = deltay; pose_odomTo_map.pose.position.z = deltaz;
             pose_odomTo_map.pose.orientation.x = q_odomTo_map.x();
             pose_odomTo_map.pose.orientation.y = q_odomTo_map.y();
@@ -1563,8 +1576,9 @@ public:
         mtxtranformOdomToWorld.unlock();
         //publish the laserpointcloud in world frame
 
-        //publish global map
-        publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, "map");//publish world map
+        //publish global map 
+        cout << "Publish Map World ..." << endl;
+        publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);//publish world map
 
         if (icp.hasConverged() == true && icp.getFitnessScore() < historyKeyframeFitnessScore)
         {
@@ -1574,7 +1588,7 @@ public:
 
 
             pose_odomTo_map.header.stamp = timeLaserInfoStamp;
-            pose_odomTo_map.header.frame_id = "map";
+            pose_odomTo_map.header.frame_id = mapFrame;
             pose_odomTo_map.pose.position.x = x; pose_odomTo_map.pose.position.y = y; pose_odomTo_map.pose.position.z = z;
             pose_odomTo_map.pose.orientation.x = q_odomTo_map.x();
             pose_odomTo_map.pose.orientation.y = q_odomTo_map.y();
@@ -1668,12 +1682,12 @@ int main(int argc, char** argv)
     exec.add_node(MO);
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\033[1;32m----> Map Optimization Started.\033[0m");
+    
+    std::thread localizeInWorldThread(&mapOptimization::globalLocalizeThread, MO);
 
     exec.spin();
 
     rclcpp::shutdown();
-
-    std::thread localizeInWorldThread(&mapOptimization::globalLocalizeThread, MO);
 
     localizeInWorldThread.join();
 
