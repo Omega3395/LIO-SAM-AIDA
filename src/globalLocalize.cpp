@@ -1411,10 +1411,10 @@ public:
         icp.setInputTarget(cloudGlobalMapDS);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result, ndt.getFinalTransformation());
-        std::cout << "the pose before initializing is: x" << transformInTheWorld[3] << " y" << transformInTheWorld[4]
-                  << " z" << transformInTheWorld[5] <<std::endl;
-	    std::cout << "the pose in odom before initializing is: x" << tranformOdomToWorld[3] << " y" << tranformOdomToWorld[4]
-                  << " z" << tranformOdomToWorld[5] <<std::endl;
+        std::cout << "the pose before initializing is: x =" << transformInTheWorld[3] << " y =" << transformInTheWorld[4]
+                  << " z =" << transformInTheWorld[5] <<std::endl;
+	    std::cout << "the pose in odom before initializing is: x =" << tranformOdomToWorld[3] << " y =" << tranformOdomToWorld[4]
+                  << " z =" << tranformOdomToWorld[5] <<std::endl;
         std::cout << "the icp score in initializing process is: " << icp.getFitnessScore() << std::endl;
         std::cout << "the pose after initializing process is: "<< icp.getFinalTransformation() << std::endl;
 
