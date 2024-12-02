@@ -1349,6 +1349,7 @@ public:
             }
             else if(initializedFlag == Initializing)
             {
+                std::cout << "On Rviz2 select 2D Pose Estimate and select the pose to align the Pointcloud" << std::endl;
                 std::cout << "Offer A New Guess Please " << std::endl;//do nothing, wait for a new initial guess
                 rclcpp::sleep_for(std::chrono::seconds(1));
             }
@@ -1384,7 +1385,7 @@ public:
             return;
 	    //cloudScanForInitialize->clear();
         std::cout << "the size of incoming lasercloud: " << laserCloudIn->points.size() << std::endl;
-
+        std::cout << "Pause the bag " << std::endl;
         pcl::NormalDistributionsTransform<PointType, PointType> ndt;
         ndt.setTransformationEpsilon(0.01);
         ndt.setResolution(1.0);
