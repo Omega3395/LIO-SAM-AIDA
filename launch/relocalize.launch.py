@@ -8,15 +8,15 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     share_dir = get_package_share_directory('lio_sam')
-    parameter_file = LaunchConfiguration('params_file')
+    parameter_file = LaunchConfiguration('params_loc_file')
     parameter_navsat_file = LaunchConfiguration('navsat_transform_file')
     xacro_path = os.path.join(share_dir, 'config', 'robot.urdf.xacro')
     rviz_config_file = os.path.join(share_dir, 'config', 'localization.rviz')
 
     params_declare = DeclareLaunchArgument(
-        'params_file',
+        'params_loc_file',
         default_value=os.path.join(
-            share_dir, 'config', 'params.yaml'),
+            share_dir, 'config', 'params_loc.yaml'),
         description='FPath to the ROS2 parameters file to use.')
 
     print("urdf_file_name : {}".format(xacro_path))
