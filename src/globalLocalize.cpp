@@ -1355,11 +1355,11 @@ public:
             {
                 std::cout << "On Rviz2 select 2D Pose Estimate and select the pose to align the Pointcloud" << std::endl;
                 std::cout << "Offer A New Guess Please " << std::endl;//do nothing, wait for a new initial guess
-                rclcpp::sleep_for(std::chrono::seconds(1));
+                rclcpp::sleep_for(std::chrono::seconds(10));
             }
             else
             {
-		        rclcpp::sleep_for(std::chrono::seconds(10));
+		        rclcpp::sleep_for(std::chrono::seconds(2));
 
                 double t_start = rclcpp::Clock().now().seconds();  // Tempo di inizio in secondi
                 ICPscanMatchGlobal();
@@ -1493,20 +1493,20 @@ public:
             pcl::CropBox<PointType> boxFilter;
             boxFilter.setInputCloud(cloudGlobalMapDS);
             boxFilter.setMin(Eigen::Vector4f(
-            last_pose.pose.position.x - 80.0, // x_min
-            last_pose.pose.position.y - 80.0, // y_min
+            last_pose.pose.position.x - 50.0, // x_min
+            last_pose.pose.position.y - 50.0, // y_min
             last_pose.pose.position.z - 5,  // z_min 
             1.0
             ));
             boxFilter.setMax(Eigen::Vector4f(
-            last_pose.pose.position.x + 80.0, // x_max
-            last_pose.pose.position.y + 80.0, // y_max
+            last_pose.pose.position.x + 50.0, // x_max
+            last_pose.pose.position.y + 50.0, // y_max
             last_pose.pose.position.z + 25.0,  // z_max
             1.0
             ));
             boxFilter.filter(*localCloudMapDS);
             //std::cout << "Pub Crop Global" << std::endl;
-            //publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
+            publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
             //std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
             /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
             // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
