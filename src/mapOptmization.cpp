@@ -196,6 +196,7 @@ public:
             pcl::PointCloud<PointType>::Ptr globalSurfCloud(new pcl::PointCloud<PointType>());
             pcl::PointCloud<PointType>::Ptr globalSurfCloudDS(new pcl::PointCloud<PointType>());
             pcl::PointCloud<PointType>::Ptr globalMapCloud(new pcl::PointCloud<PointType>());
+
             for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) 
             {
                 *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
@@ -230,6 +231,27 @@ public:
             res->success = ret == 0;
             downSizeFilterCorner.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
             downSizeFilterSurf.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
+
+            std::ofstream pathFile(saveMapDirectory + "/path.csv");
+            if (!pathFile.is_open()) {
+                cerr << "Failed to open file for saving path." << endl;
+                res->success = false;  // Indica che il salvataggio non è andato a buon fine
+                    return;
+
+            }
+            for (const auto& poseStamped : globalPath.poses) {
+                const auto& pose = poseStamped.pose;
+                pathFile << pose.position.x << " ,"
+                         << pose.position.y << " ,"
+                         << pose.position.z << " ,"
+                         << pose.orientation.x << " ,"
+                         << pose.orientation.y << " ,"
+                         << pose.orientation.z << " ,"
+                         << pose.orientation.w << "\n";
+            }      
+            pathFile.close();
+
+            cout << "Path saved successfully to " << saveMapDirectory + "/path.csv" << endl;    
             cout << "****************************************************" << endl;
             cout << "Saving map to pcd files completed\n" << endl;
             return;
