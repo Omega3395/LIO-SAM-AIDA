@@ -6,6 +6,7 @@
 #include "lio_sam/msg/cloud_info.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 
+#include <pcl/filters/random_sample.h>
 #include <gtsam/geometry/Rot3.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/slam/PriorFactor.h>
@@ -77,7 +78,8 @@ public:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubRecentKeyFrame;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCloudRegisteredRaw;
 
-
+    // adding publisher for cropped global map
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubCropGlobal;
     // Definire i subscriber in ROS 2
     rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subLaserCloudInfo;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subGPS;
@@ -227,6 +229,8 @@ public:
                         std::bind(&mapOptimization::initialpose_callback,this, std::placeholders::_1));
 
         pubMapWorld = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/cloud_map_map",1);//
+        //Adding publisher for crop Global Map
+        pubCropGlobal = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/global_map_cropped",1);
         //fortest_publasercloudINWorld = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/laserclouinmapframe",1);
         pubLaserCloudInWorld = create_publisher<sensor_msgs::msg::PointCloud2>("lio_sam/mapping/lasercloud_in_world", 1);//added
         pubOdomToMapPose = create_publisher<geometry_msgs::msg::PoseStamped>("lio_sam/mapping/pose_odomTo_map", 1);
@@ -1360,7 +1364,7 @@ public:
                 double t_start = rclcpp::Clock().now().seconds();  // Tempo di inizio in secondi
                 ICPscanMatchGlobal();
                 double t_end = rclcpp::Clock().now().seconds();  // Tempo di fine in secondi
-                //std::cout << "ICP time consuming: " << t_end-t_start;
+                std::cout << "ICP total time consuming: " << t_end-t_start << std::endl;
                 
             }
 
@@ -1453,7 +1457,6 @@ public:
         publishCloud(pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, mapFrame);
 	    cout << "Publish Map World ..." << endl;
         publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);
-
         if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
         {
             initializedFlag = Initializing;
@@ -1483,14 +1486,40 @@ public:
 
     void ICPscanMatchGlobal()
     {
-	    //initializing
-/*
-        if(initializedFlag == NonInitialized)
-        {
-            ICPLocalizeInitialize();
-            return;
-        }*/
+        /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
+            nav_msgs::msg::Path path4pose = globalPath;
+            const auto& last_pose = path4pose.poses.back();
+            pcl::PointCloud<PointType>::Ptr localCloudMapDS(new pcl::PointCloud<PointType>());
+            pcl::CropBox<PointType> boxFilter;
+            boxFilter.setInputCloud(cloudGlobalMapDS);
+            boxFilter.setMin(Eigen::Vector4f(
+            last_pose.pose.position.x - 80.0, // x_min
+            last_pose.pose.position.y - 80.0, // y_min
+            last_pose.pose.position.z - 5,  // z_min 
+            1.0
+            ));
+            boxFilter.setMax(Eigen::Vector4f(
+            last_pose.pose.position.x + 80.0, // x_max
+            last_pose.pose.position.y + 80.0, // y_max
+            last_pose.pose.position.z + 25.0,  // z_max
+            1.0
+            ));
+            boxFilter.filter(*localCloudMapDS);
+            //std::cout << "Pub Crop Global" << std::endl;
+            //publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
+            //std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
+            /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
+            // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
+            pcl::PointCloud<PointType>::Ptr localCloudMapSampled(new pcl::PointCloud<PointType>());
 
+            // Creare il filtro di random sampling
+            pcl::RandomSample<PointType> randomSampler;
+            randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
+            randomSampler.setSample(70000); // Numero massimo di punti desiderati
+
+            // Applica il filtro e memorizza i punti nella nuova nuvola
+            randomSampler.filter(*localCloudMapSampled);
+            //std::cout << "Local cloud sampled size: " << localCloudMapSampled->points.size() << std::endl;
 	    if (cloudKeyPoses3D->points.empty() == true)
             return;
 
@@ -1506,29 +1535,26 @@ public:
             *latestCloudIn += *transformPointCloud(win_surfCloudKeyFrames[latestFrameIDGlobalLocalize],   &win_cloudKeyPoses6D[latestFrameIDGlobalLocalize]);
             std::cout << "the size of input cloud: " << latestCloudIn->points.size() <<std::endl;
 
+            pcl::PointCloud<PointType>::Ptr cloudin(new pcl::PointCloud<PointType>());
+            pcl::RandomSample<PointType> randomSampler2;
+            randomSampler2.setInputCloud(latestCloudIn); // Imposta la nuvola input
+            randomSampler2.setSample(8000); // Numero massimo di punti desiderati
+
+            // Applica il filtro e memorizza i punti nella nuova nuvola
+            randomSampler2.filter(*cloudin);
+            //std::cout << "Input cloud sampled size: " << cloudin->points.size() << std::endl;
+
             mtxWin.unlock();
 
         /******************added by gc************************/
-
-
-//        int latestFrameIDGlobalLocalize;
-//        latestFrameIDGlobalLocalize = cloudKeyPoses3D->size() - 1;
-//
-//
-//        //latest Frame cloudpoints In the odom Frame
-//
-//        pcl::PointCloud<PointType>::Ptr latestCloudIn(new pcl::PointCloud<PointType>());
-//        *latestCloudIn += *transformPointCloud(cornerCloudKeyFrames[latestFrameIDGlobalLocalize], &cloudKeyPoses6D->points[latestFrameIDGlobalLocalize]);
-//        *latestCloudIn += *transformPointCloud(surfCloudKeyFrames[latestFrameIDGlobalLocalize],   &cloudKeyPoses6D->points[latestFrameIDGlobalLocalize]);
-//        std::cout << "the size of input cloud: " << latestCloudIn->points.size() <<std::endl;
-
+        
         pcl::NormalDistributionsTransform<PointType, PointType> ndt;
         ndt.setTransformationEpsilon(0.01);
         ndt.setResolution(1.0);
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(100);
+        icp.setMaxCorrespondenceDistance(10);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
@@ -1544,19 +1570,25 @@ public:
         Eigen::Matrix4f matricInitGuess = transodomToWorld_init.matrix();
 	    //std::cout << "matricInitGuess: " << matricInitGuess << std::endl;
         //Firstly perform ndt in coarse resolution
-        ndt.setInputSource(latestCloudIn);
-        ndt.setInputTarget(cloudGlobalMapDS);
+        double t_ndt_s = rclcpp::Clock().now().seconds();
+        ndt.setInputSource(cloudin);
+        //ndt.setInputTarget(cloudGlobalMapDS);
+        ndt.setInputTarget(localCloudMapSampled);
         pcl::PointCloud<PointType>::Ptr unused_result_0(new pcl::PointCloud<PointType>());
         ndt.align(*unused_result_0, matricInitGuess);
+        double t_ndt_e = rclcpp::Clock().now().seconds();
+        std::cout << "NDT time consuming: " << t_ndt_e-t_ndt_s << std::endl;
+
         //use the outcome of ndt as the initial guess for ICP
-        icp.setInputSource(latestCloudIn);
-        icp.setInputTarget(cloudGlobalMapDS);
+        double t_icp_s = rclcpp::Clock().now().seconds();
+        icp.setInputSource(cloudin);
+        icp.setInputTarget(localCloudMapSampled);
+        //icp.setInputTarget(cloudGlobalMapDS);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result, ndt.getFinalTransformation());
-
+        double t_icp_e = rclcpp::Clock().now().seconds();
+        std::cout << "ICP time consuming: " << t_icp_e-t_icp_s << std::endl;
         std::cout << "ICP converg flag:" << icp.hasConverged() << ". Fitness score: " << icp.getFitnessScore() << std::endl << std::endl;
-
-
         //if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
            // return;
 
@@ -1578,8 +1610,8 @@ public:
         //publish the laserpointcloud in world frame
 
         //publish global map 
-        cout << "Publish Map World ..." << endl;
-        publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);//publish world map
+        //cout << "Publish Map World ..." << endl;
+        //publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);//publish world map
 
         if (icp.hasConverged() == true && icp.getFitnessScore() < historyKeyframeFitnessScore)
         {
