@@ -76,6 +76,7 @@ public:
     rclcpp::Subscription<lio_sam::msg::CloudInfo>::SharedPtr subCloud;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subGPS;
     rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr subLoop;
+    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr subGPSfiltered;
 
     std::deque<nav_msgs::msg::Odometry> gpsQueue;
     lio_sam::msg::CloudInfo cloudInfo;
@@ -150,6 +151,7 @@ public:
     Eigen::Affine3f incrementalOdometryAffineBack;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> br;
+    sensor_msgs::msg::NavSatFix gps_data_; 
 
     mapOptimization(const rclcpp::NodeOptions & options) : ParamServer("lio_sam_mapOptimization", options)
     {
@@ -175,7 +177,8 @@ public:
         subLoop = create_subscription<std_msgs::msg::Float64MultiArray>(
             "lio_loop/loop_closure_detection", qos,
             std::bind(&mapOptimization::loopInfoHandler, this, std::placeholders::_1));
-
+        subGPSfiltered=create_subscription<sensor_msgs::msg::NavSatFix>(
+            "gps/filtered", 200, std::bind(&mapOptimization::gps_callback, this, std::placeholders::_1));
         auto saveMapService = [this](const std::shared_ptr<rmw_request_id_t> request_header, const std::shared_ptr<lio_sam::srv::SaveMap::Request> req, std::shared_ptr<lio_sam::srv::SaveMap::Response> res) -> void {
             (void)request_header;
             string saveMapDirectory;
@@ -237,10 +240,16 @@ public:
                 cerr << "Failed to open file for saving path." << endl;
                 res->success = false;  // Indica che il salvataggio non è andato a buon fine
                     return;
-
             }
+            bool originWritten = false;
             for (const auto& poseStamped : globalPath.poses) {
                 const auto& pose = poseStamped.pose;
+                if (!originWritten) {
+                    pathFile << "COORDINATE GEOGRAFICHE ORIGINE, "
+                             << gps_data_.latitude << " ,"
+                             << gps_data_.longitude << "\n";
+                    originWritten = true;  // Imposta a true dopo la prima scrittura
+                }
                 pathFile << pose.position.x << " ,"
                          << pose.position.y << " ,"
                          << pose.position.z << " ,"
@@ -352,7 +361,15 @@ public:
             publishFrames();
         }
     }
+    void gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
+    {
+        // Qui salviamo i dati ricevuti dal topic in una variabile
+        gps_data_ = *msg;  // Salva una copia del messaggio ricevuto
 
+        // Opzionale: Stampare i dati per il debug
+        RCLCPP_INFO(this->get_logger(), "Latitude: %f, Longitude: %f, Altitude: %f",
+                    gps_data_.latitude, gps_data_.longitude, gps_data_.altitude);
+    }
     void gpsHandler(const nav_msgs::msg::Odometry::SharedPtr gpsMsg)
     {
         gpsQueue.push_back(*gpsMsg);
