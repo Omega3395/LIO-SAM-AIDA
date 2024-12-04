@@ -247,7 +247,8 @@ public:
                 if (!originWritten) {
                     pathFile << "COORDINATE GEOGRAFICHE ORIGINE, "
                              << gps_data_.latitude << " ,"
-                             << gps_data_.longitude << "\n";
+                             << gps_data_.longitude << ",";
+                             << gps_data_.altitude << "\n";
                     originWritten = true;  // Imposta a true dopo la prima scrittura
                 }
                 pathFile << pose.position.x << " ,"
