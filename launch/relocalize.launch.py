@@ -52,33 +52,6 @@ def generate_launch_description():
             arguments=['-d', rviz_config_file],
             output='screen'
         ),
-        # Aggiunta del nodo EKF GPS
-        Node(
-            package='robot_localization',
-            executable='ekf_node',
-            name='ekf_gps',
-            respawn=True,
-            output='screen',
-            parameters=[parameter_navsat_file],
-            remappings=[
-                ('odometry/filtered', '/odometry/navsat'),
-            ],
-            #arguments=['--ros-args', '--log-level', 'debug']
-        ),
-        Node(
-            package='robot_localization',
-            executable='navsat_transform_node',
-            name='navsat_transform_node',
-            output='screen',
-            parameters=[parameter_navsat_file],
-            remappings=[
-                ('imu', '/oxts/imu'),  # Input IMU
-                ('gps/fix', '/oxts/nav_sat_fix'),  # Input GPS
-                ('odometry/filtered', '/odometry/navsat'),  # Input Odometry
-                ('gps/filtered', 'gps/filtered'),  # GPS filtrato (output)
-                ('odometry/gps', 'odometry/gps'),  # Odometry GPS (output)
-            ]
-        ),
         Node(
             package='lio_sam',
             executable='lio_sam_imuPreintegration',

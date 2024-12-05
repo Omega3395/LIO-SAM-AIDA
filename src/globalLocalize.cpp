@@ -1333,8 +1333,8 @@ public:
         pcl::PointCloud<PointType>::Ptr cloud_temp(new pcl::PointCloud<PointType>());
         downSizeFilterICP.setInputCloud(cloudGlobalMap);
         downSizeFilterICP.filter(*cloud_temp);
-        //*cloudGlobalMap = *cloud_temp;
         *cloudGlobalMapDS = *cloud_temp;
+        //*cloudGlobalMapDS = *cloudGlobalMap;
 
         std::cout << "test 0.01  the size of global cloud: " << cloudGlobalMap->points.size() << std::endl;
         std::cout << "test 0.02  the size of global map after filter: " << cloudGlobalMapDS->points.size() << std::endl;
@@ -1355,11 +1355,11 @@ public:
             {
                 std::cout << "On Rviz2 select 2D Pose Estimate and select the pose to align the Pointcloud" << std::endl;
                 std::cout << "Offer A New Guess Please " << std::endl;//do nothing, wait for a new initial guess
-                rclcpp::sleep_for(std::chrono::seconds(10));
+                //rclcpp::sleep_for(std::chrono::seconds(10));
             }
             else
             {
-		        rclcpp::sleep_for(std::chrono::seconds(2));
+		        rclcpp::sleep_for(std::chrono::seconds(1));
 
                 double t_start = rclcpp::Clock().now().seconds();  // Tempo di inizio in secondi
                 ICPscanMatchGlobal();
@@ -1377,6 +1377,29 @@ public:
 
     void ICPLocalizeInitialize()
     {
+        //rcodata posa iniziale
+        float x = -0.0795097;
+        float y = 0.200607;
+        float z = 0.0;
+
+        tf2::Quaternion q_global;
+        double roll_global; double pitch_global; double yaw_global;
+
+        q_global.setX(0.0);
+        q_global.setY(0.0);
+        q_global.setZ(0.997861);
+        q_global.setW(0.0653666);
+
+        tf2::Matrix3x3 mat(q_global);
+        mat.getRPY(roll_global, pitch_global, yaw_global);
+        //global transformation
+        transformInTheWorld[0] = roll_global;
+        transformInTheWorld[1] = pitch_global;
+        transformInTheWorld[2] = yaw_global;
+        transformInTheWorld[3] = x;
+        transformInTheWorld[4] = y;
+        transformInTheWorld[5] = z;
+        /****************************************************************************** */
         pcl::PointCloud<PointType>::Ptr laserCloudIn(new pcl::PointCloud<PointType>());
 
         mtx_general.lock();
@@ -1506,7 +1529,7 @@ public:
             ));
             boxFilter.filter(*localCloudMapDS);
             //std::cout << "Pub Crop Global" << std::endl;
-            publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
+            //publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
             //std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
             /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
             // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
@@ -1515,7 +1538,7 @@ public:
             // Creare il filtro di random sampling
             pcl::RandomSample<PointType> randomSampler;
             randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
-            randomSampler.setSample(70000); // Numero massimo di punti desiderati
+            randomSampler.setSample(60000); // Numero massimo di punti desiderati
 
             // Applica il filtro e memorizza i punti nella nuova nuvola
             randomSampler.filter(*localCloudMapSampled);
@@ -1554,10 +1577,10 @@ public:
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(10);
-        icp.setMaximumIterations(100);
-        icp.setTransformationEpsilon(1e-6);
-        icp.setEuclideanFitnessEpsilon(1e-6);
+        icp.setMaxCorrespondenceDistance(1); //10
+        icp.setMaximumIterations(50); //100
+        icp.setTransformationEpsilon(1e-5); //1e-6
+        icp.setEuclideanFitnessEpsilon(1e-5); //1e-6
         icp.setRANSACIterations(0);
 
         // Align cloud
@@ -1653,7 +1676,9 @@ public:
         float x = pose_msg->pose.pose.position.x;
         float y = pose_msg->pose.pose.position.y;
         float z = pose_msg->pose.pose.position.z;
-
+        std:: cout <<"pos x= " << pose_msg->pose.pose.position.x << std::endl;
+        std:: cout <<"pos y= " << pose_msg->pose.pose.position.y << std::endl;
+        std:: cout <<"pos z= " << pose_msg->pose.pose.position.z << std::endl;
         //roll-pitch-yaw
         tf2::Quaternion q_global;
         double roll_global; double pitch_global; double yaw_global;
@@ -1662,6 +1687,11 @@ public:
         q_global.setY(pose_msg->pose.pose.orientation.y);
         q_global.setZ(pose_msg->pose.pose.orientation.z);
         q_global.setW(pose_msg->pose.pose.orientation.w);
+
+        std:: cout <<"orie x= " << pose_msg->pose.pose.orientation.x << std::endl;
+        std:: cout <<"orie y= " << pose_msg->pose.pose.orientation.y << std::endl;
+        std:: cout <<"orie z= " << pose_msg->pose.pose.orientation.z << std::endl;
+        std:: cout <<"orie w= " << pose_msg->pose.pose.orientation.w << std::endl;
 
         tf2::Matrix3x3 mat(q_global);
         mat.getRPY(roll_global, pitch_global, yaw_global);
