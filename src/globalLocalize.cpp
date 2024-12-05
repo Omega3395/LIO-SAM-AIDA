@@ -1516,20 +1516,20 @@ public:
             pcl::CropBox<PointType> boxFilter;
             boxFilter.setInputCloud(cloudGlobalMapDS);
             boxFilter.setMin(Eigen::Vector4f(
-            last_pose.pose.position.x - 50.0, // x_min
-            last_pose.pose.position.y - 50.0, // y_min
+            last_pose.pose.position.x - 40.0, // x_min
+            last_pose.pose.position.y - 40.0, // y_min
             last_pose.pose.position.z - 5,  // z_min 
             1.0
             ));
             boxFilter.setMax(Eigen::Vector4f(
-            last_pose.pose.position.x + 50.0, // x_max
-            last_pose.pose.position.y + 50.0, // y_max
+            last_pose.pose.position.x + 40.0, // x_max
+            last_pose.pose.position.y + 40.0, // y_max
             last_pose.pose.position.z + 25.0,  // z_max
             1.0
             ));
             boxFilter.filter(*localCloudMapDS);
             //std::cout << "Pub Crop Global" << std::endl;
-            //publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
+            publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
             //std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
             /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
             // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
@@ -1572,15 +1572,15 @@ public:
         /******************added by gc************************/
         
         pcl::NormalDistributionsTransform<PointType, PointType> ndt;
-        ndt.setTransformationEpsilon(0.01);
+        ndt.setTransformationEpsilon(0.5);//0.01
         ndt.setResolution(1.0);
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(1); //10
+        icp.setMaxCorrespondenceDistance(1.5); //10
         icp.setMaximumIterations(50); //100
-        icp.setTransformationEpsilon(1e-5); //1e-6
-        icp.setEuclideanFitnessEpsilon(1e-5); //1e-6
+        icp.setTransformationEpsilon(0.05); //1e-6
+        icp.setEuclideanFitnessEpsilon(0.004); //1e-6
         icp.setRANSACIterations(0);
 
         // Align cloud
