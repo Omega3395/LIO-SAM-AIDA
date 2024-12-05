@@ -1359,8 +1359,8 @@ public:
             }
             else
             {
-		        rclcpp::sleep_for(std::chrono::seconds(1));
-
+		        if (cloudKeyPoses3D->points.empty() == true)
+                    return;
                 double t_start = rclcpp::Clock().now().seconds();  // Tempo di inizio in secondi
                 ICPscanMatchGlobal();
                 double t_end = rclcpp::Clock().now().seconds();  // Tempo di fine in secondi
@@ -1378,17 +1378,17 @@ public:
     void ICPLocalizeInitialize()
     {
         //rcodata posa iniziale
-        float x = -0.0795097;
-        float y = 0.200607;
-        float z = 0.0;
+        float x = initial_x;
+        float y = initial_y;
+        float z = initial_z;
 
         tf2::Quaternion q_global;
         double roll_global; double pitch_global; double yaw_global;
 
-        q_global.setX(0.0);
-        q_global.setY(0.0);
-        q_global.setZ(0.997861);
-        q_global.setW(0.0653666);
+        q_global.setX(initial_rot_x);
+        q_global.setY(initial_rot_y);
+        q_global.setZ(initial_rot_z);
+        q_global.setW(initial_rot_w);
 
         tf2::Matrix3x3 mat(q_global);
         mat.getRPY(roll_global, pitch_global, yaw_global);
@@ -1516,14 +1516,14 @@ public:
             pcl::CropBox<PointType> boxFilter;
             boxFilter.setInputCloud(cloudGlobalMapDS);
             boxFilter.setMin(Eigen::Vector4f(
-            last_pose.pose.position.x - 40.0, // x_min
-            last_pose.pose.position.y - 40.0, // y_min
+            last_pose.pose.position.x - 70.0, // x_min
+            last_pose.pose.position.y - 70.0, // y_min
             last_pose.pose.position.z - 5,  // z_min 
             1.0
             ));
             boxFilter.setMax(Eigen::Vector4f(
-            last_pose.pose.position.x + 40.0, // x_max
-            last_pose.pose.position.y + 40.0, // y_max
+            last_pose.pose.position.x + 70.0, // x_max
+            last_pose.pose.position.y + 70.0, // y_max
             last_pose.pose.position.z + 25.0,  // z_max
             1.0
             ));
@@ -1538,7 +1538,7 @@ public:
             // Creare il filtro di random sampling
             pcl::RandomSample<PointType> randomSampler;
             randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
-            randomSampler.setSample(60000); // Numero massimo di punti desiderati
+            randomSampler.setSample(40000); // Numero massimo di punti desiderati
 
             // Applica il filtro e memorizza i punti nella nuova nuvola
             randomSampler.filter(*localCloudMapSampled);
@@ -1572,15 +1572,15 @@ public:
         /******************added by gc************************/
         
         pcl::NormalDistributionsTransform<PointType, PointType> ndt;
-        ndt.setTransformationEpsilon(0.5);//0.01
+        ndt.setTransformationEpsilon(0.01);//0.01
         ndt.setResolution(1.0);
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(1.5); //10
-        icp.setMaximumIterations(50); //100
-        icp.setTransformationEpsilon(0.05); //1e-6
-        icp.setEuclideanFitnessEpsilon(0.004); //1e-6
+        icp.setMaxCorrespondenceDistance(1); //10
+        icp.setMaximumIterations(100); //100
+        icp.setTransformationEpsilon(1e-6); //1e-6
+        icp.setEuclideanFitnessEpsilon(1e-6); //1e-6
         icp.setRANSACIterations(0);
 
         // Align cloud

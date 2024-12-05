@@ -153,6 +153,14 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
+    float initial_x;
+    float initial_y;
+    float initial_z;
+    float initial_rot_x;
+    float initial_rot_y;
+    float initial_rot_z;
+    float initial_rot_w;
+
     ParamServer(std::string node_name, const rclcpp::NodeOptions & options) : Node(node_name, options)
     {
         declare_parameter("pointCloudTopic", "points");
@@ -309,6 +317,21 @@ public:
         declare_parameter("globalMapVisualizationLeafSize", 1.0);
         get_parameter("globalMapVisualizationLeafSize", globalMapVisualizationLeafSize);
 
+        declare_parameter("initial_x", 0.0);
+        get_parameter("initial_x",initial_x);
+        declare_parameter("initial_y", 0.0);
+        get_parameter("initial_y",initial_y);
+        declare_parameter("initial_z", 0.0);
+        get_parameter("initial_z",initial_z);
+        declare_parameter("initial_rot_x", 0.0);
+        get_parameter("initial_rot_x",initial_rot_x);
+        declare_parameter("initial_rot_y", 0.0);
+        get_parameter("initial_rot_y",initial_rot_y);
+        declare_parameter("initial_rot_z", 0.0);
+        get_parameter("initial_rot_z",initial_rot_z);
+        declare_parameter("initial_rot_w", 1.0);
+        get_parameter("initial_rot_w",initial_rot_w);
+        
         usleep(100);
     }
 
