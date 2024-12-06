@@ -139,7 +139,7 @@ public:
 
     rclcpp::Time timeLaserInfoStamp;
     double timeLaserCloudInfoLast;
-
+    double FitnessScore;
     float transformTobeMapped[6];
 
     std::mutex mtx;
@@ -323,7 +323,7 @@ public:
 
         timeLaserInfoStamp = msgIn->header.stamp;
         timeLaserCloudInfoLast = stamp2Sec(msgIn->header.stamp);
-
+        
         // extract info and feature cloud
         cloudInfo = *msgIn;
         pcl::fromROSMsg(msgIn->cloud_corner,  *laserCloudCornerLast);
@@ -1113,6 +1113,9 @@ public:
 
         addOdomFactor();
 
+        // gps factor
+        //addGPSFactor();
+
         // update iSAM
         isam->update(gtSAMgraph, initialEstimate);
         isam->update();
@@ -1365,7 +1368,7 @@ public:
                 ICPscanMatchGlobal();
                 double t_end = rclcpp::Clock().now().seconds();  // Tempo di fine in secondi
                 std::cout << "ICP total time consuming: " << t_end-t_start << std::endl;
-                
+                std::cout << "******************************************************* " << std::endl;
             }
 
 
@@ -1516,21 +1519,21 @@ public:
             pcl::CropBox<PointType> boxFilter;
             boxFilter.setInputCloud(cloudGlobalMapDS);
             boxFilter.setMin(Eigen::Vector4f(
-            last_pose.pose.position.x - 70.0, // x_min
-            last_pose.pose.position.y - 70.0, // y_min
+            last_pose.pose.position.x - 40.0, // x_min
+            last_pose.pose.position.y - 40.0, // y_min
             last_pose.pose.position.z - 5,  // z_min 
             1.0
             ));
             boxFilter.setMax(Eigen::Vector4f(
-            last_pose.pose.position.x + 70.0, // x_max
-            last_pose.pose.position.y + 70.0, // y_max
-            last_pose.pose.position.z + 25.0,  // z_max
+            last_pose.pose.position.x + 40.0, // x_max
+            last_pose.pose.position.y + 40.0, // y_max
+            last_pose.pose.position.z + 35.0,  // z_max
             1.0
             ));
             boxFilter.filter(*localCloudMapDS);
             //std::cout << "Pub Crop Global" << std::endl;
             publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
-            //std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
+            std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
             /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
             // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
             pcl::PointCloud<PointType>::Ptr localCloudMapSampled(new pcl::PointCloud<PointType>());
@@ -1538,7 +1541,7 @@ public:
             // Creare il filtro di random sampling
             pcl::RandomSample<PointType> randomSampler;
             randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
-            randomSampler.setSample(40000); // Numero massimo di punti desiderati
+            randomSampler.setSample(50000); // Numero massimo di punti desiderati
 
             // Applica il filtro e memorizza i punti nella nuova nuvola
             randomSampler.filter(*localCloudMapSampled);
@@ -1561,7 +1564,7 @@ public:
             pcl::PointCloud<PointType>::Ptr cloudin(new pcl::PointCloud<PointType>());
             pcl::RandomSample<PointType> randomSampler2;
             randomSampler2.setInputCloud(latestCloudIn); // Imposta la nuvola input
-            randomSampler2.setSample(8000); // Numero massimo di punti desiderati
+            randomSampler2.setSample(9000); // Numero massimo di punti desiderati
 
             // Applica il filtro e memorizza i punti nella nuova nuvola
             randomSampler2.filter(*cloudin);
@@ -1577,10 +1580,10 @@ public:
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(1); //10
-        icp.setMaximumIterations(100); //100
-        icp.setTransformationEpsilon(1e-6); //1e-6
-        icp.setEuclideanFitnessEpsilon(1e-6); //1e-6
+        icp.setMaxCorrespondenceDistance(1.5); //10
+        icp.setMaximumIterations(200); //100
+        icp.setTransformationEpsilon(1e-7); //1e-6
+        icp.setEuclideanFitnessEpsilon(1e-7); //1e-6
         icp.setRANSACIterations(0);
 
         // Align cloud
@@ -1631,7 +1634,7 @@ public:
         tranformOdomToWorld[5] = z;
         mtxtranformOdomToWorld.unlock();
         //publish the laserpointcloud in world frame
-
+        FitnessScore = icp.getFitnessScore();
         //publish global map 
         //cout << "Publish Map World ..." << endl;
         //publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);//publish world map
@@ -1652,10 +1655,104 @@ public:
             pose_odomTo_map.pose.orientation.w = q_odomTo_map.w();
             pubOdomToMapPose->publish(pose_odomTo_map);
         }
+        //else
+        //{
+            //addGPSFactor();
+        //}
 
-
+        //
         //publish the trsformation between map and odom
 
+    }
+     void addGPSFactor()
+    {
+        if (gpsQueue.empty())
+            return;
+        // wait for system initialized and settles down
+        if (cloudKeyPoses3D->points.empty())
+            return;
+        else
+        {
+            if (pointDistance(cloudKeyPoses3D->front(), cloudKeyPoses3D->back()) < 5.0)
+                return;
+        }
+
+        // pose covariance small, no need to correct
+        //if (FitnessScore < historyKeyframeFitnessScore)
+        //    std::cout <<"fitness good"<<std::endl;
+        //    return;
+
+        // last gps position
+        static PointType lastGPSPoint;
+
+        while (!gpsQueue.empty())
+        {
+            if (stamp2Sec(gpsQueue.front().header.stamp) < timeLaserCloudInfoLast - 0.2)
+            {
+                // message too old
+                gpsQueue.pop_front();
+            }
+            else if (stamp2Sec(gpsQueue.front().header.stamp) > timeLaserCloudInfoLast + 0.2)
+            {
+                // message too new
+                break;
+            }
+            else
+            {
+                nav_msgs::msg::Odometry thisGPS = gpsQueue.front();
+                gpsQueue.pop_front();
+
+                // GPS too noisy, skip
+                float noise_x = thisGPS.pose.covariance[0];
+                float noise_y = thisGPS.pose.covariance[7];
+                float noise_z = thisGPS.pose.covariance[14];
+                if (noise_x > gpsCovThreshold || noise_y > gpsCovThreshold)
+                    continue;
+                float gps_x = thisGPS.pose.pose.position.x;
+                float gps_y = thisGPS.pose.pose.position.y;
+                float gps_z = thisGPS.pose.pose.position.z;
+                if (!useGpsElevation)
+                {
+                    gps_z = transformTobeMapped[5];
+                    noise_z = 0.01;
+                }
+
+                // GPS not properly initialized (0,0,0)
+                if (abs(gps_x) < 1e-6 && abs(gps_y) < 1e-6)
+                    continue;
+
+                // Add GPS every a few meters
+                PointType curGPSPoint;
+                curGPSPoint.x = gps_x;
+                curGPSPoint.y = gps_y;
+                curGPSPoint.z = gps_z;
+                if (pointDistance(curGPSPoint, lastGPSPoint) < 5.0)
+                    continue;
+                else
+                    lastGPSPoint = curGPSPoint;
+                
+                
+                std::cout <<"++++++++++++++++++++++++++++++Added a GPS factor++++++++++++++++++++++++++++++" << std::endl;
+                /*mtxtranformOdomToWorld.lock();
+                //renew tranformOdomToWorld
+                tranformOdomToWorld[0] = tranformOdomToWorld[0];
+                tranformOdomToWorld[1] = tranformOdomToWorld[1];
+                tranformOdomToWorld[2] = tranformOdomToWorld[2];
+                tranformOdomToWorld[3] = gps_x;
+                tranformOdomToWorld[4] = gps_y;
+                tranformOdomToWorld[5] = gps_z;
+                mtxtranformOdomToWorld.unlock(); */
+
+                gtsam::Vector Vector3(3);
+                Vector3 << max(noise_x, 1.0f), max(noise_y, 1.0f), max(noise_z, 1.0f);
+                noiseModel::Diagonal::shared_ptr gps_noise = noiseModel::Diagonal::Variances(Vector3);
+                gtsam::GPSFactor gps_factor(cloudKeyPoses3D->size(), gtsam::Point3(gps_x, gps_y, gps_z), gps_noise);
+                gtSAMgraph.add(gps_factor);
+
+                //aLoopIsClosed = true;
+                break;
+            }
+        }
     }
 
 
