@@ -1114,12 +1114,20 @@ public:
         addOdomFactor();
 
         // gps factor
-        //addGPSFactor();
+        if(use_GPS==true)
+            addGPSFactor();
 
         // update iSAM
         isam->update(gtSAMgraph, initialEstimate);
         isam->update();
-
+        if (aLoopIsClosed == true)
+        {
+            isam->update();
+            isam->update();
+            isam->update();
+            isam->update();
+            isam->update();
+        }
         gtSAMgraph.resize(0);
         initialEstimate.clear();
 
@@ -1158,8 +1166,8 @@ public:
         
         
             
-            win_cloudKeyPoses3D.push_back(thisPose3D);
-            win_cloudKeyPoses6D.push_back(thisPose6D);
+        win_cloudKeyPoses3D.push_back(thisPose3D);
+        win_cloudKeyPoses6D.push_back(thisPose6D);
 		if(win_cloudKeyPoses3D.size() > winSize)
 		{
 			win_cloudKeyPoses3D.erase(win_cloudKeyPoses3D.begin());
@@ -1197,9 +1205,9 @@ public:
         /*added    gc*/
 
         
-            win_cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
-            win_surfCloudKeyFrames.push_back(thisSurfKeyFrame);
-        	if(win_cornerCloudKeyFrames.size() > winSize)
+        win_cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
+        win_surfCloudKeyFrames.push_back(thisSurfKeyFrame);
+        if(win_cornerCloudKeyFrames.size() > winSize)
 		{
 			win_cornerCloudKeyFrames.erase(win_cornerCloudKeyFrames.begin());
 			win_surfCloudKeyFrames.erase(win_surfCloudKeyFrames.begin());
@@ -1213,7 +1221,36 @@ public:
         updatePath(thisPose6D);
     }
 
+    void correctPoses()
+    {
+        if (cloudKeyPoses3D->points.empty())
+            return;
 
+        if (aLoopIsClosed == true)
+        {
+            // clear path
+            globalPath.poses.clear();
+            // update key poses
+            int numPoses = isamCurrentEstimate.size();
+            for (int i = 0; i < numPoses; ++i)
+            {
+                cloudKeyPoses3D->points[i].x = isamCurrentEstimate.at<Pose3>(i).translation().x();
+                cloudKeyPoses3D->points[i].y = isamCurrentEstimate.at<Pose3>(i).translation().y();
+                cloudKeyPoses3D->points[i].z = isamCurrentEstimate.at<Pose3>(i).translation().z();
+
+                cloudKeyPoses6D->points[i].x = cloudKeyPoses3D->points[i].x;
+                cloudKeyPoses6D->points[i].y = cloudKeyPoses3D->points[i].y;
+                cloudKeyPoses6D->points[i].z = cloudKeyPoses3D->points[i].z;
+                cloudKeyPoses6D->points[i].roll  = isamCurrentEstimate.at<Pose3>(i).rotation().roll();
+                cloudKeyPoses6D->points[i].pitch = isamCurrentEstimate.at<Pose3>(i).rotation().pitch();
+                cloudKeyPoses6D->points[i].yaw   = isamCurrentEstimate.at<Pose3>(i).rotation().yaw();
+
+                updatePath(cloudKeyPoses6D->points[i]);
+            }
+
+            aLoopIsClosed = false;
+        }
+    }
 
     void updatePath(const PointTypePose& pose_in)
     {
@@ -1362,8 +1399,6 @@ public:
             }
             else
             {
-		        if (cloudKeyPoses3D->points.empty() == true)
-                    return;
                 double t_start = rclcpp::Clock().now().seconds();  // Tempo di inizio in secondi
                 ICPscanMatchGlobal();
                 double t_end = rclcpp::Clock().now().seconds();  // Tempo di fine in secondi
@@ -1512,78 +1547,79 @@ public:
 
     void ICPscanMatchGlobal()
     {
-        /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
-            nav_msgs::msg::Path path4pose = globalPath;
-            const auto& last_pose = path4pose.poses.back();
-            pcl::PointCloud<PointType>::Ptr localCloudMapDS(new pcl::PointCloud<PointType>());
-            pcl::CropBox<PointType> boxFilter;
-            boxFilter.setInputCloud(cloudGlobalMapDS);
-            boxFilter.setMin(Eigen::Vector4f(
-            last_pose.pose.position.x - 40.0, // x_min
-            last_pose.pose.position.y - 40.0, // y_min
-            last_pose.pose.position.z - 5,  // z_min 
-            1.0
-            ));
-            boxFilter.setMax(Eigen::Vector4f(
-            last_pose.pose.position.x + 40.0, // x_max
-            last_pose.pose.position.y + 40.0, // y_max
-            last_pose.pose.position.z + 35.0,  // z_max
-            1.0
-            ));
-            boxFilter.filter(*localCloudMapDS);
-            //std::cout << "Pub Crop Global" << std::endl;
-            publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
-            std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
-            /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
-            // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
-            pcl::PointCloud<PointType>::Ptr localCloudMapSampled(new pcl::PointCloud<PointType>());
-
-            // Creare il filtro di random sampling
-            pcl::RandomSample<PointType> randomSampler;
-            randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
-            randomSampler.setSample(50000); // Numero massimo di punti desiderati
-
-            // Applica il filtro e memorizza i punti nella nuova nuvola
-            randomSampler.filter(*localCloudMapSampled);
-            //std::cout << "Local cloud sampled size: " << localCloudMapSampled->points.size() << std::endl;
-	    if (cloudKeyPoses3D->points.empty() == true)
+    
+	    if (cloudKeyPoses3D->points.empty() == true){
             return;
-
+        }
         //change-5
+        /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
+        nav_msgs::msg::Path path4pose = globalPath;
+        const auto& last_pose = path4pose.poses.back();
+        pcl::PointCloud<PointType>::Ptr localCloudMapDS(new pcl::PointCloud<PointType>());
+        pcl::CropBox<PointType> boxFilter;
+        boxFilter.setInputCloud(cloudGlobalMapDS);
+        boxFilter.setMin(Eigen::Vector4f(
+        last_pose.pose.position.x - 40.0, // x_min
+        last_pose.pose.position.y - 40.0, // y_min
+        last_pose.pose.position.z - 5,  // z_min 
+        1.0
+        ));
+        boxFilter.setMax(Eigen::Vector4f(
+        last_pose.pose.position.x + 40.0, // x_max
+        last_pose.pose.position.y + 40.0, // y_max
+        last_pose.pose.position.z + 35.0,  // z_max
+        1.0
+        ));
+        boxFilter.filter(*localCloudMapDS);
+        //std::cout << "Pub Crop Global" << std::endl;
+        publishCloud(pubCropGlobal, localCloudMapDS, timeLaserInfoStamp, mapFrame);
+        std::cout << "Local cloud size: " << localCloudMapDS->points.size() << std::endl;
+        /*****************ADD BOX CROP FILTER ON GLOBAL MAP*********************/
+        // Creare un nuovo punto di cloud per memorizzare il risultato del random sampling
+        pcl::PointCloud<PointType>::Ptr localCloudMapSampled(new pcl::PointCloud<PointType>());
+
+        // Creare il filtro di random sampling
+        pcl::RandomSample<PointType> randomSampler;
+        randomSampler.setInputCloud(localCloudMapDS); // Imposta la nuvola input
+        randomSampler.setSample(38000); // Numero massimo di punti desiderati
+
+        // Applica il filtro e memorizza i punti nella nuova nuvola
+        randomSampler.filter(*localCloudMapSampled);
+        //std::cout << "Local cloud sampled size: " << localCloudMapSampled->points.size() << std::endl;
         /******************added by gc************************/
 
-            mtxWin.lock();
-            int latestFrameIDGlobalLocalize;
-            latestFrameIDGlobalLocalize = win_cloudKeyPoses3D.size() - 1;
+        mtxWin.lock();
+        int latestFrameIDGlobalLocalize;
+        latestFrameIDGlobalLocalize = win_cloudKeyPoses3D.size() - 1;
 
-            pcl::PointCloud<PointType>::Ptr latestCloudIn(new pcl::PointCloud<PointType>());
-            *latestCloudIn += *transformPointCloud(win_cornerCloudKeyFrames[latestFrameIDGlobalLocalize], &win_cloudKeyPoses6D[latestFrameIDGlobalLocalize]);
-            *latestCloudIn += *transformPointCloud(win_surfCloudKeyFrames[latestFrameIDGlobalLocalize],   &win_cloudKeyPoses6D[latestFrameIDGlobalLocalize]);
-            std::cout << "the size of input cloud: " << latestCloudIn->points.size() <<std::endl;
+        pcl::PointCloud<PointType>::Ptr latestCloudIn(new pcl::PointCloud<PointType>());
+        *latestCloudIn += *transformPointCloud(win_cornerCloudKeyFrames[latestFrameIDGlobalLocalize], &win_cloudKeyPoses6D[latestFrameIDGlobalLocalize]);
+        *latestCloudIn += *transformPointCloud(win_surfCloudKeyFrames[latestFrameIDGlobalLocalize],   &win_cloudKeyPoses6D[latestFrameIDGlobalLocalize]);
+        std::cout << "the size of input cloud: " << latestCloudIn->points.size() <<std::endl;
 
-            pcl::PointCloud<PointType>::Ptr cloudin(new pcl::PointCloud<PointType>());
-            pcl::RandomSample<PointType> randomSampler2;
-            randomSampler2.setInputCloud(latestCloudIn); // Imposta la nuvola input
-            randomSampler2.setSample(9000); // Numero massimo di punti desiderati
+        pcl::PointCloud<PointType>::Ptr cloudin(new pcl::PointCloud<PointType>());
+        pcl::RandomSample<PointType> randomSampler2;
+        randomSampler2.setInputCloud(latestCloudIn); // Imposta la nuvola input
+        randomSampler2.setSample(7500); // Numero massimo di punti desiderati
 
-            // Applica il filtro e memorizza i punti nella nuova nuvola
-            randomSampler2.filter(*cloudin);
-            //std::cout << "Input cloud sampled size: " << cloudin->points.size() << std::endl;
+        // Applica il filtro e memorizza i punti nella nuova nuvola
+        randomSampler2.filter(*cloudin);
+        //std::cout << "Input cloud sampled size: " << cloudin->points.size() << std::endl;
 
-            mtxWin.unlock();
+        mtxWin.unlock();
 
         /******************added by gc************************/
         
         pcl::NormalDistributionsTransform<PointType, PointType> ndt;
-        ndt.setTransformationEpsilon(0.01);//0.01
+        ndt.setTransformationEpsilon(0.001);//0.01
         ndt.setResolution(1.0);
 
 
         pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(1.5); //10
-        icp.setMaximumIterations(200); //100
-        icp.setTransformationEpsilon(1e-7); //1e-6
-        icp.setEuclideanFitnessEpsilon(1e-7); //1e-6
+        icp.setMaxCorrespondenceDistance(5); //10
+        icp.setMaximumIterations(1000); //100
+        icp.setTransformationEpsilon(1e-8); //1e-6
+        icp.setEuclideanFitnessEpsilon(1e-8); //1e-6
         icp.setRANSACIterations(0);
 
         // Align cloud
@@ -1655,11 +1691,9 @@ public:
             pose_odomTo_map.pose.orientation.w = q_odomTo_map.w();
             pubOdomToMapPose->publish(pose_odomTo_map);
         }
-        //else
-        //{
-            //addGPSFactor();
-        //}
-
+        localCloudMapDS.reset(new pcl::PointCloud<PointType>());
+        localCloudMapSampled.reset(new pcl::PointCloud<PointType>());
+        cloudin.reset(new pcl::PointCloud<PointType>());
         //
         //publish the trsformation between map and odom
 
@@ -1726,22 +1760,14 @@ public:
                 curGPSPoint.x = gps_x;
                 curGPSPoint.y = gps_y;
                 curGPSPoint.z = gps_z;
-                if (pointDistance(curGPSPoint, lastGPSPoint) < 5.0)
-                    continue;
-                else
-                    lastGPSPoint = curGPSPoint;
+                //if (pointDistance(curGPSPoint, lastGPSPoint) < 5.0)
+                //    continue;
+                //else
+                lastGPSPoint = curGPSPoint;
                 
                 
                 std::cout <<"++++++++++++++++++++++++++++++Added a GPS factor++++++++++++++++++++++++++++++" << std::endl;
-                /*mtxtranformOdomToWorld.lock();
-                //renew tranformOdomToWorld
-                tranformOdomToWorld[0] = tranformOdomToWorld[0];
-                tranformOdomToWorld[1] = tranformOdomToWorld[1];
-                tranformOdomToWorld[2] = tranformOdomToWorld[2];
-                tranformOdomToWorld[3] = gps_x;
-                tranformOdomToWorld[4] = gps_y;
-                tranformOdomToWorld[5] = gps_z;
-                mtxtranformOdomToWorld.unlock(); */
+                
 
                 gtsam::Vector Vector3(3);
                 Vector3 << max(noise_x, 1.0f), max(noise_y, 1.0f), max(noise_z, 1.0f);
@@ -1749,7 +1775,7 @@ public:
                 gtsam::GPSFactor gps_factor(cloudKeyPoses3D->size(), gtsam::Point3(gps_x, gps_y, gps_z), gps_noise);
                 gtSAMgraph.add(gps_factor);
 
-                //aLoopIsClosed = true;
+                aLoopIsClosed = true;
                 break;
             }
         }

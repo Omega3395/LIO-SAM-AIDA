@@ -160,7 +160,8 @@ public:
     float initial_rot_y;
     float initial_rot_z;
     float initial_rot_w;
-
+    bool use_GPS;
+    
     ParamServer(std::string node_name, const rclcpp::NodeOptions & options) : Node(node_name, options)
     {
         declare_parameter("pointCloudTopic", "points");
@@ -331,7 +332,8 @@ public:
         get_parameter("initial_rot_z",initial_rot_z);
         declare_parameter("initial_rot_w", 1.0);
         get_parameter("initial_rot_w",initial_rot_w);
-        
+        declare_parameter("use_GPS", true);
+        get_parameter("use_GPS",use_GPS);
         usleep(100);
     }
 
