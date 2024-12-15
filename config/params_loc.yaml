@@ -4,8 +4,8 @@
     # Topics
     pointCloudTopic: "/ouster_sensor_center/points"     # Point cloud data
     imuTopic: "/oxts/imu"                               # IMU data
-    odomTopic: "/odometry"                         # IMU pre-preintegration odometry, same frequency as IMU
-    gpsTopic: "odometry/gps"                            # GPS odometry topic from navsat, see module_navsat.launch file
+    odomTopic: "/odometry"                              # IMU pre-preintegration odometry, same frequency as IMU
+    gpsTopic: "odometry/gps"                       # GPS odometry topic from navsat, see module_navsat.launch file
 
     # Frames
     lidarFrame: "ouster_sensor_center"
@@ -21,9 +21,9 @@
     poseCovThreshold: 2.0                       # m^2, threshold for using GPS data
 
     # Export settings
-    savePCD: false                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
+    savePCD: true                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
     savePCDDirectory: "/Downloads/LOAM/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
-
+    savePATHDirectory: "/Dowloads/Path/"
     # Sensor Settings
     sensor: 'ouster'                             # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
     N_SCAN: 128                                  # number of lidar channels (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
@@ -31,7 +31,7 @@
     downsampleRate: 1                            # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
     lidarMinRange: 5.0                           # default: 1.0, minimum lidar range to be used
-    lidarMaxRange: 30.0                         # default: 1000.0, maximum lidar range to be used
+    lidarMaxRange: 30.0                          # default: 1000.0, maximum lidar range to be used
 
     # IMU Settings
     imuAccNoise: 3.9939570888238808e-03          #da cambiare
@@ -75,7 +75,7 @@
     surroundingkeyframeAddingDistThreshold: 1.0   # meters, regulate keyframe adding threshold
     surroundingkeyframeAddingAngleThreshold: 0.2  # radians, regulate keyframe adding threshold
     surroundingKeyframeDensity: 2.0               # meters, downsample surrounding keyframe poses   
-    historyKeyframeFitnessScore: 2.0              # icp fitness threshold 
+    historyKeyframeFitnessScore: 0.1              # icp fitness threshold 
 
     #initalpose
     initial_x: -0.0795097
