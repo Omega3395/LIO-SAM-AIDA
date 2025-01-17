@@ -68,8 +68,8 @@
     rotation_tollerance: 1000.0                   # radians
 
     # CPU Params
-    numberOfCores: 4                              # number of cores for mapping optimization
-    mappingProcessInterval: 0.001                  # seconds, regulate mapping frequency
+    numberOfCores: 8                              # number of cores for mapping optimization
+    mappingProcessInterval: 0.001                 # seconds, regulate mapping frequency
 
     # Surrounding map
     surroundingkeyframeAddingDistThreshold: 1.0   # meters, regulate keyframe adding threshold
@@ -78,10 +78,11 @@
     historyKeyframeFitnessScore: 0.1              # icp fitness threshold 
 
     #initalpose
-    initial_x: -0.0795097
-    initial_y:  0.200607
+    initial_x: 0.168497
+    initial_y:  -0.289223
     initial_z:  0.0
     initial_rot_x: 0.0
     initial_rot_y: 0.0
-    initial_rot_z: 0.997861
-    initial_rot_w: 0.0653666
+    initial_rot_z: 0.999874
+    initial_rot_w: 0.015856
+

@@ -208,8 +208,15 @@ public:
     geometry_msgs::msg::PoseStamped poseOdomToMap;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubOdomToMapPose;
 
+    struct GpsData {
+    double position_x;
+    double position_y;
+    double position_z;
+    double covariance_xx; // Covarianza x
+    double covariance_yy; // Covarianza y
+    };
 
-
+    std::vector<GpsData> gpsDataList; 
     /*************added by gc******************/
 
     mapOptimization(const rclcpp::NodeOptions & options) : ParamServer("lio_sam_mapOptimization", options)
@@ -274,7 +281,29 @@ public:
 
             cout << "Path saved successfully to " << savePathDirectory + "/path.csv" << endl;    
             cout << "****************************************************" << endl;
-            cout << "Saving map to pcd files completed\n" << endl;
+             // Salva GPS data
+            std::ofstream gpsFile(savePathDirectory + "/gps_data.csv");
+            if (!gpsFile.is_open()) {
+                cerr << "Failed to open file for saving GPS data." << endl;
+                res->success = false;
+                return;
+            }
+
+            // Scrive l'header nel file CSV
+            gpsFile << "position_x,position_y,position_z,covariance_xx,covariance_yy\n";
+            for (const auto& data : gpsDataList) {
+                gpsFile << data.position_x << ","
+                        << data.position_y << ","
+                        << data.position_z << ","
+                        << data.covariance_xx << ","
+                        << data.covariance_yy << "\n";
+            }
+            gpsFile.close();
+            cout << "GPS data saved successfully to " << savePathDirectory + "/gps_data.csv" << endl;
+
+            cout << "****************************************************" << endl;
+            cout << "Saving map to pcd files and GPS data completed\n" << endl;
+            res->success = true; // Salvataggio completato con successo
             return;
         };
         
@@ -445,6 +474,13 @@ public:
 
     void gpsHandler(const nav_msgs::msg::Odometry::SharedPtr gpsMsg)
     {
+        GpsData data;
+        data.position_x = gpsMsg->pose.pose.position.x;
+        data.position_y = gpsMsg->pose.pose.position.y;
+        data.position_z = gpsMsg->pose.pose.position.z;
+        data.covariance_xx = gpsMsg->pose.covariance[0];  // Covarianza X-X
+        data.covariance_yy = gpsMsg->pose.covariance[7];  // Covarianza Y-Y
+        gpsDataList.push_back(data);
         /*   
         //if (gpsMsg->status.status != 0)
         //    return;
@@ -1501,6 +1537,7 @@ public:
     void ICPLocalizeInitialize()
     {
         //rcodata posa iniziale
+        
         float x = initial_x;
         float y = initial_y;
         float z = initial_z;
@@ -1603,7 +1640,7 @@ public:
         publishCloud(pubLaserCloudInWorld, unused_result, timeLaserInfoStamp, mapFrame);
 	    cout << "Publish Map World ..." << endl;
         publishCloud(pubMapWorld, cloudGlobalMapDS, timeLaserInfoStamp, mapFrame);
-        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
+        if (icp.hasConverged() == false || icp.getFitnessScore() > 0.3)
         {
             initializedFlag = Initializing;
             std::cout << "Initializing Fail" << std::endl;
